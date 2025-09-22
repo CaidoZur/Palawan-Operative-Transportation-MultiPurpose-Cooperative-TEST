@@ -1,0 +1,74 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" />
+    <link rel="stylesheet" href="{% static 'css/ready.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/demo.css' %}" />
+    <link rel="stylesheet" href="{% static 'css/login_custom.css' %}" />
+</head>
+<body>
+    <div class="overlay"></div>
+    <div class="login-card">
+        <img src="{% static 'img/home.png' %}" onerror="this.style.display='none'">
+        <div class="login-title">POTMPC</div>
+        <div class="login-subtitle">Palawan Operative Transportation Multi-Purpose Cooperative</div>
+        <form method="post" class="login-form">
+            {% csrf_token %}
+            <div class="input-group">
+                <span class="icon">&#128100;</span>
+                <input type="text" name="username" placeholder="USER" required>
+            </div>
+            <div class="input-group">
+                <span class="icon">&#128274;</span>
+                <input type="password" name="password" placeholder="PASSWORD" id="password" required>
+                <span class="toggle-password" onclick="togglePassword()">&#128065;</span>
+            </div>
+            <div class="options">
+                <label><input type="checkbox" name="remember"> Remember Username</label>
+                <a href="#">Forgot Password</a>
+            </div>
+            <button type="submit" class="login-btn">Sign In</button>
+        </form>
+        <form method="post" enctype="multipart/form-data" action="{% url 'qr-image-login' %}">
+        {% csrf_token %}
+            <label for="qr_image">Upload QR Code Image</label>
+                <input type="file" name="qr_image" accept="image/*" required>
+            <button type="submit" class="btn btn-primary">Login with QR Image</button>
+        </form>
+    </div>
+    
+
+    <script>
+        function togglePassword() {
+            var pwd = document.getElementById('password');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+            } else {
+                pwd.type = 'password';
+            }
+        }
+    </script>
+</body>
+</html>
+                        
+        <script src="{% static 'js/core/jquery.3.2.1.min.js' %}"></script>
+        <script src="{% static 'js/plugin/jquery-ui-1.12.1.custom/jquery-ui.min.js' %}"></script>
+        <script src="{% static 'js/core/popper.min.js' %}"></script>
+        <script src="{% static 'js/core/bootstrap.min.js' %}"></script>
+        <script src="{% static 'js/plugin/chartist/chartist.min.js' %}"></script>
+        <script src="{% static 'js/plugin/chartist/plugin/chartist-plugin-tooltip.min.js' %}"></script>
+                        
+        <script src="{% static 'js/plugin/bootstrap-notify/bootstrap-notify.min.js' %}"></script>
+        <script src="{% static 'js/plugin/bootstrap-toggle/bootstrap-toggle.min.js' %}"></script>
+        <script src="{% static 'js/plugin/jquery-mapael/jquery.mapael.min.js' %}"></script>
+        <script src="{% static 'js/plugin/jquery-mapael/maps/world_countries.min.js' %}"></script>
+        <script src="{% static 'js/plugin/jquery-circle-progress/circle-progress.min.js' %}"></script>
+        <script src="{% static 'js/plugin/jquery-scrollbar/jquery.scrollbar.min.js' %}"></script>
+        <script src="{% static 'js/ready.min.js' %}"></script>
+                        
+</html>
