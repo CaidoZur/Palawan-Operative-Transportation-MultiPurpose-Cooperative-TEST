@@ -1,2 +1,4 @@
 # Palawan-Operative-Transportation-MultiPurpose-Cooperative
-PORMPC
+POTMPC
+
+QR LOGIN ADDED
