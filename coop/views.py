@@ -1,3 +1,15 @@
+# ==== Member Dormant/Activate Toggle ====
+from django.contrib.admin.views.decorators import staff_member_required
+
+@staff_member_required
+def member_dormant_toggle(request, pk):
+    """
+    Toggle dormant/activate status for a member (listview action button).
+    """
+    member = get_object_or_404(Member, pk=pk)
+    member.is_dormant = not member.is_dormant
+    member.save()
+    return redirect('member_list')
 
 # ==== Imports ====
 from django.shortcuts import render, redirect, get_object_or_404
@@ -12,17 +24,6 @@ from django.forms import inlineformset_factory
 from django.utils import timezone
 from .models import Member, Vehicle, Document
 from .forms import MemberForm, VehicleForm, DocumentForm
-from django.contrib.auth import get_user_model, login as auth_login
-from django.shortcuts import HttpResponse
-from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-from django.http import Http404
-import qrcode
-from io import BytesIO
-from .models import QRLoginToken
-from pyzbar.pyzbar import decode
-from PIL import Image
-from django.core.files.uploadedfile import InMemoryUploadedFile
 
 # ==== Inline Formset for Member-Vehicle ====
 # This formset allows you to manage Vehicle objects related to a Member
@@ -51,24 +52,16 @@ def member_add(request):
     """
     if request.method == "POST":
         member_form = MemberForm(request.POST)
-        # Validate member form first
         if member_form.is_valid():
             member = member_form.save()
-            # Assign selected vehicle to this member if chosen
-            vehicle = member_form.cleaned_data.get('vehicle')
-            if vehicle:
-                vehicle.member = member
-                vehicle.save()
             # Handle new vehicle creation via formset
             formset = VehicleFormSet(request.POST, instance=member)
             if formset.is_valid():
                 formset.save()
-                return redirect("member-list")
+                return redirect("member_list")
         else:
-            # If member form is invalid, still bind formset for error display
             formset = VehicleFormSet(request.POST)
     else:
-        # GET request: show empty forms
         member_form = MemberForm()
         formset = VehicleFormSet()
     return render(request, "member_add.html", {"form": member_form, "formset": formset})
@@ -122,15 +115,9 @@ def member_edit(request, pk):
         formset = VehicleFormSet(request.POST, instance=member)
         if member_form.is_valid() and formset.is_valid():
             member_form.save()
-            # Assign selected vehicle to this member if chosen
-            vehicle = member_form.cleaned_data.get('vehicle')
-            if vehicle:
-                vehicle.member = member
-                vehicle.save()
             formset.save()
-            return redirect("member-list")
+            return redirect("member_list")
     else:
-        # GET request: show forms pre-filled with member and their vehicles
         member_form = MemberForm(instance=member)
         formset = VehicleFormSet(instance=member)
     return render(request, "member_add.html", {"form": member_form, "formset": formset})
@@ -149,7 +136,7 @@ def member_renewal_update(request, pk):
     vehicle = getattr(member, 'vehicle', None)
     if vehicle:
         return redirect('document-add-renewal', vehicle_id=vehicle.id, renewal_date=new_date)
-    return redirect('member-list')
+    return redirect('member_list')
 
 @login_required
 def document_add_renewal(request, vehicle_id, renewal_date):
@@ -242,18 +229,18 @@ class MemberListView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        # Filter queryset based on search query
-        queryset = super().get_queryset()
+        # Filter queryset based on search query, matching new Member model fields
+        queryset = super().get_queryset().select_related('batch').prefetch_related('vehicles')
         q = self.request.GET.get("q", "")
         if q:
             queryset = queryset.filter(
-                Q(name__icontains=q) |
-                Q(gmail__icontains=q) |
-                Q(batch__number__icontains=q) |
-                Q(file_number__icontains=q) |
-                Q(renewal_date__icontains=q) |
-                Q(vehicle__plate_number__icontains=q)
-            )
+                Q(full_name__icontains=q) |
+                Q(phone_number__icontains=q) |
+                Q(email__icontains=q) |
+                Q(batch__name__icontains=q) |
+                Q(batch_monitoring_number__icontains=q) |
+                Q(vehicles__plate_number__icontains=q)
+            ).distinct()
         return queryset
 
     def render_to_response(self, context, **response_kwargs):
@@ -425,84 +412,3 @@ def custom_login(request):
         else:
             messages.error(request, "Invalid username or password.")
     return render(request, "login.html")
-
-def qr_login_view(request, token):
-    """
-    Visit /qr-login/<token>/ to log in.
-    Token is validated and, if valid, user is logged in and redirected.
-    """
-    try:
-        qr = QRLoginToken.objects.get(token=token)
-    except QRLoginToken.DoesNotExist:
-        # token not found
-        raise Http404("Invalid or expired QR code")
-
-    if not qr.is_valid():
-        raise Http404("Token invalid or expired")
-
-    user = qr.user
-    # Log user in
-    auth_login(request, user)
-
-    # If single-use, deactivate it now
-    if qr.single_use:
-        qr.is_active = False
-        qr.save(update_fields=["is_active"])
-
-    # redirect depending on staff / role logic used in your site
-    if user.is_staff:
-        return redirect("home")
-    else:
-        return redirect("user_home")
-
-# View to render user's QR as PNG on demand (requires login)
-@login_required
-def my_qr_view(request):
-    """
-    Renders the logged-in user's active QR token as an image.
-    If none exists (or expired), create a new one with a default TTL.
-    """
-    user = request.user
-    # Try to get a currently valid token
-    token_qs = user.qr_tokens.filter(is_active=True)
-    valid_token = None
-    for t in token_qs:
-        if t.is_valid():
-            valid_token = t
-            break
-    if not valid_token:
-        # create one: TTL 24 hours, single-use by default
-        valid_token = QRLoginToken.create_token_for_user(user, ttl_hours=24, single_use=True)
-
-    login_url = request.build_absolute_uri(f"/qr-login/{valid_token.token}/")
-    # create qr PNG
-    img = qrcode.make(login_url)
-    buf = BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return HttpResponse(buf.getvalue(), content_type="image/png")
-
-def qr_image_login(request):
-    """
-    Accepts an uploaded image, decodes the QR code,
-    and logs the user in if the token/URL is valid.
-    """
-    if request.method == "POST" and request.FILES.get("qr_image"):
-        img_file: InMemoryUploadedFile = request.FILES["qr_image"]
-        img = Image.open(img_file)
-        decoded = decode(img)
-        if not decoded:
-            messages.error(request, "No QR code found in the image.")
-            return redirect("login")
-        # If there are multiple results, use the first
-        qr_text = decoded[0].data.decode("utf-8").strip()
-
-        # If the QR contains a full URL, redirect there.
-        # If it only contains the token, build the URL.
-        if qr_text.startswith("http"):
-            return redirect(qr_text)
-        else:
-            return redirect(reverse("qr-login", args=[qr_text]))
-
-    # GET requests or errors just go back to login page
-    return redirect("login")

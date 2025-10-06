@@ -34,15 +34,7 @@
             </div>
             <button type="submit" class="login-btn">Sign In</button>
         </form>
-        <form method="post" enctype="multipart/form-data" action="{% url 'qr-image-login' %}">
-        {% csrf_token %}
-            <label for="qr_image">Upload QR Code Image</label>
-                <input type="file" name="qr_image" accept="image/*" required>
-            <button type="submit" class="btn btn-primary">Login with QR Image</button>
-        </form>
     </div>
-    
-
     <script>
         function togglePassword() {
             var pwd = document.getElementById('password');
