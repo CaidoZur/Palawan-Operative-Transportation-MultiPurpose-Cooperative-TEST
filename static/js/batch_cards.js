@@ -103,10 +103,8 @@ function renderBatchCards() {
 					${notifOptions}
 					<div style="margin-top:1rem; font-size:0.95rem; color:#555;">
 						<strong>Members:</strong>
-						<ul class="members-list">
+						<ul style="list-style:none; padding-left:0; margin-bottom:0;">
 							${pagedMembers.map(m => `<li>${m}</li>`).join('')}
-							${Array.from({ length: MEMBERS_PER_PAGE - pagedMembers.length })
-								.map(() => `<li style="visibility:hidden;">-</li>`).join('')}
 						</ul>
 						<div class="text-right" style="font-size:0.9rem; color:#888;">Page ${page} of ${totalPages}</div>
 						<div class="d-flex justify-content-center mt-2">

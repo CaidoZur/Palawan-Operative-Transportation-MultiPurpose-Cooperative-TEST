@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Accounts List{% endblock %}
+{% block content %}
+<div class="container mt-5">
+    <h2>Accounts</h2>
+    <input type="text" id="account-search" placeholder="Search ..." class="form-control" name="q" autocomplete="off" />
+    <table class="table table-bordered table-hover mt-4">
+        <thead class="thead-light">
+            <tr>
+                <th>Username</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Phone Number</th>
+                <th>Role</th>
+                <th>Connected Member</th>
+                <th>ID Image</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="account-table-body">
+            {% include 'includes/account_table_rows.html' %}
+        </tbody>
+    </table>
+</div>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Edit account modal -->
+<script>
+$(function() {
+    $('#account-search').on('input', function() {
+        var query = $(this).val();
+        $.ajax({
+            url: "{% url 'accounts_list' %}",
+            data: { q: query },
+            dataType: 'json',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            success: function(data) {
+                $('#account-table-body').html(data.html);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

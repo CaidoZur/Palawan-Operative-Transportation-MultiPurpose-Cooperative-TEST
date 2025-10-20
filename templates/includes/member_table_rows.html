@@ -1,20 +1,53 @@
 {% for member in object_list %}
 <tr>
-    <td>{{ member.name }}</td>
-    <td>{{ member.gmail }}</td>
-    <td>{{ member.batch.number }}</td>
-    <td>{{ member.file_number }}</td>
-    <td>{{ member.renewal_date }}</td>
+    {# global index: prefer page_obj.start_index (1-based) + forloop.counter0 -> 1-based global number; fallback to start_index or per-page counter #}
     <td>
-        {% if member.vehicle %}
-            {{ member.vehicle.plate_number }}
+        {% if page_obj %}
+            {{ page_obj.start_index|add:forloop.counter0 }}
+        {% elif start_index is defined %}
+            {{ start_index|add:forloop.counter }}
+        {% else %}
+            {{ forloop.counter }}
+        {% endif %}
+    </td>
+    <td>{{ member.full_name }}</td>
+    <td>
+        {% if member.batch %}
+            {{ member.batch.number }}
         {% else %}
             N/A
         {% endif %}
     </td>
     <td>
-        <a href="{% url 'member-edit' member.pk %}" class="btn btn-sm btn-primary">Edit</a>
-        <a href="{% url 'member-delete' member.pk %}" class="btn btn-sm btn-danger">Delete</a>
+        {% if member.user_account and member.user_account.phone_number %}
+            {{ member.user_account.phone_number }}
+        {% else %}
+            -
+        {% endif %}
+    </td>
+    <td>
+        {% if member.user_account and member.user_account.email %}
+            {{ member.user_account.email }}
+        {% else %}
+            -
+        {% endif %}
+    </td>
+    {# removed batch_monitoring_number column per request #}
+    <td>
+        {% with plates=member.vehicles.all %}
+            {% if plates %}
+                {% for v in plates %}
+                    {{ v.plate_number }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+                N/A
+            {% endif %}
+        {% endwith %}
+    </td>
+    <td class="text-right">
+        <a href="{% url 'member_view' member.pk %}" class="btn btn-sm btn-info">View</a>
+        <a href="{% url 'member_edit' member.pk %}" class="btn btn-sm btn-primary">Edit</a>
+        <a href="{% url 'member_confirm_delete' member.pk %}" class="btn btn-sm btn-danger">Delete</a>
     </td>
 </tr>
 {% empty %}
