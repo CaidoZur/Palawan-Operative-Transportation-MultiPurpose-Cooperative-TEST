@@ -11,9 +11,11 @@ urlpatterns = [
     path('accounts/<int:user_id>/edit/', views.edit_account, name='edit_account'),
     path("admin/user-approvals/", views.user_approvals, name="user_approvals"),
     path("admin/approve-user/<int:user_id>/", views.approve_user, name="approve_user"),
+    path('admin/profile/edit/', views.admin_profile_edit, name='admin_profile_edit'),
     path("user/documents/upload/", views.user_upload_document, name="user_upload_document"),
     path("documents/approve/", views.approve_documents, name="approve_documents"),
     path("documents/approve/<int:doc_id>/", views.approve_document, name="approve_document"),
+    path("documents/reject/<int:doc_id>/", views.reject_document, name="reject_document"),
     path("broadcast/", views.broadcast, name="broadcast"),
     path("admin/", admin.site.urls),
     path("", views.home, name="home"),
@@ -49,6 +51,7 @@ urlpatterns = [
     path('user/announcements/', views.user_announcements, name='user_announcements'),
     path('user/documents/', views.user_documents, name='user_documents'),
     path('profile/', views.my_profile, name='my_profile'),
+    path('user/profile/edit/', views.my_profile, name='user_profile_edit'),
 
     # AUTH
     path('login/', views.custom_login, name='login'),
@@ -66,6 +69,7 @@ urlpatterns = [
     path('api/members/search/', views.member_search_api, name='member_search_api'),
     path('api/users/search/', views.user_search_api, name='user_search_api'),
     path('api/vehicle-member-select2/', views.vehicle_member_select2_api, name='vehicle_member_select2_api'),
+    path('user/vehicles/', views.user_vehicles, name='user_vehicles'),
 ]
 
 

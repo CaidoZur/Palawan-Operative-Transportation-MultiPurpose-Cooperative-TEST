@@ -1,18 +1,33 @@
 from django.contrib.auth import get_user_model
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from .models import User, Member, Vehicle, Batch, Document, DocumentEntry
+from .models import User, Member, Vehicle, Batch, Document, DocumentEntry, Announcement
 
 User = get_user_model()
 
 class UserProfileForm(forms.ModelForm):
     class Meta:
         model = User
-        fields = ['username', 'profile_image']
+        # allow editing username, email, phone number and profile picture
+        fields = ['username', 'full_name', 'email', 'phone_number', 'profile_image']
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'full_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'phone_number': forms.TextInput(attrs={'class': 'form-control'}),
             'profile_image': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
         }
+
+class AdminProfileForm(forms.ModelForm):
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'profile_image']
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'profile_image': forms.ClearableFileInput(attrs={'class': 'form-control-file'}),
+        }
+
 
 class CustomUserRegistrationForm(UserCreationForm):
     full_name = forms.CharField(widget=forms.TextInput(attrs={'class': 'form-control'}))
@@ -87,3 +102,22 @@ class DocumentEntryForm(forms.ModelForm):
             'official_receipt': forms.ClearableFileInput(attrs={'class': 'form-control'}),
             'certificate_of_registration': forms.ClearableFileInput(attrs={'class': 'form-control'}),
         }
+
+
+class AnnouncementForm(forms.ModelForm):
+    class Meta:
+        model = Announcement
+        fields = ['message', 'recipients']
+        widgets = {
+            'message': forms.Textarea(attrs={'class': 'form-control', 'rows': 4}),
+            'recipients': forms.SelectMultiple(attrs={'class': 'form-control select2', 'style': 'width:100%'}),
+        }
+        help_texts = {
+            'recipients': 'Select client accounts that should receive this announcement. Leave empty to target all clients.',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # limit recipients queryset to client role users
+        UserModel = get_user_model()
+        self.fields['recipients'].queryset = UserModel.objects.filter(role__iexact='client')

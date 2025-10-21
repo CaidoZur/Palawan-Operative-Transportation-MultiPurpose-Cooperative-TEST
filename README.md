@@ -1,4 +1,3 @@
-# Palawan-Operative-Transportation-MultiPurpose-Cooperative
 POTMPC
 
 9/22/25
@@ -15,3 +14,6 @@ POTMPC
 
 10:00 PM
 - RE ADDED UI DESIGNS
+
+10/21/25
+- SCRAPPED OLD UI AND APPLIED UI DESIGNS

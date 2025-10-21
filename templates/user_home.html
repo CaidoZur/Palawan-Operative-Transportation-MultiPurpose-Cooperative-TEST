@@ -1,142 +1,74 @@
 {% extends 'user_base.html' %}
 {% load static %}
-
 {% block extra_css %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/user_home_cards.css' %}">
 {% endblock %}
-
 {% block title %}User Home - POTMPC{% endblock %}
-
 {% block content %}
-
-<style>
-
-#user-home-root * { box-sizing: border-box; }
-
-#user-home-root, 
-#user-home-root * {
-  font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-  color: #0f172a;
-}
-
-#user-home-root h1, 
-#user-home-root h2, 
-#user-home-root h3,
-#user-home-root h4, 
-#user-home-root h5, 
-#user-home-root .uh-title {
-  font-family: 'Montserrat', 'Poppins', sans-serif !important;
-  letter-spacing: 0.2px;
-}
-
-#user-home-root { padding: 36px 16px; background: linear-gradient(135deg,#f8fafc,#f1f5f9); }
-#user-home-root .uh-card {
-  max-width: 920px;
-  margin: 24px auto;
-  background: #fff;
-  border-radius: 14px;
-  padding: 28px;
-  box-shadow: 0 10px 28px rgba(16,24,40,0.06);
-}
-
-/* Header */
-#user-home-root .uh-header { text-align: center; margin-bottom: 18px; }
-#user-home-root .uh-logo { width: 92px; height: auto; margin-bottom: 12px; display:inline-block; }
-#user-home-root .uh-title { font-size: 1.5rem; font-weight:700; margin-bottom:6px; color:#0b1720; }
-#user-home-root .uh-sub { font-size:1rem; color:#475569; margin-bottom:10px; }
-
-/* Body layout */
-#user-home-root .uh-grid { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
-#user-home-root .uh-column { flex: 1 1 320px; min-width:260px; max-width:460px; }
-
-/* Feature card */
-#user-home-root .uh-feature {
-  background:#fbfdff;
-  border-radius:10px;
-  padding:14px;
-  border:1px solid #e6eef7;
-  box-shadow: inset 0 0 6px rgba(2,6,23,0.02);
-}
-#user-home-root .uh-feature strong { display:block; font-weight:600; margin-bottom:6px; color:#061426; }
-#user-home-root .uh-feature p { margin:0; color:#425569; }
-
-/* Latest updates box */
-#user-home-root .uh-updates {
-  background:#f0f9ff;
-  border:1px solid #cfeefd;
-  border-radius:10px;
-  padding:12px 14px;
-  color:#083d58;
-  font-weight:500;
-}
-#user-home-root .uh-update-item { margin-bottom:10px; padding-bottom:8px; border-bottom:1px dashed rgba(6,30,46,0.06); }
-#user-home-root .uh-update-item:last-child { border-bottom:none; margin-bottom:0; padding-bottom:0; }
-
-/* Quick links */
-#user-home-root .uh-quick a {
-  display:block;
-  color:#0369a1;
-  text-decoration:none;
-  padding:8px 0;
-  font-weight:600;
-}
-#user-home-root .uh-quick a:hover { color:#054e63; transform:translateX(6px); }
-
-/* small screens */
-@media (max-width:720px) {
-  #user-home-root { padding:18px 12px; }
-  #user-home-root .uh-card { padding:18px; }
-}
-</style>
-
-<div id="user-home-root">
-  <div class="uh-card" role="main">
-    <div class="uh-header">
-      <img src="{% static 'img/logo.png' %}" alt="POTMPC Logo" class="user-home-logo">
-      <div class="uh-title">Palawan Operator's Tourist Transport Multi-Purpose Cooperative</div>
-      <div class="uh-sub">Welcome to the User Portal</div>
-      <div style="color:#64748b; font-size:0.95rem;">Manage cooperative records, view updates, and access your account tools.</div>
+<div class="container py-5">
+  <div class="row mb-4 align-items-center">
+    <div class="col-md-12">
+      <h1 class="h3 mb-1">Welcome,
+        {% if request.user.member_profile %}{{ request.user.member_profile.full_name }}
+        {% elif request.user.full_name %}{{ request.user.full_name }}
+        {% else %}{{ request.user.username }}{% endif %}
+      </h1>
+      <p class="text-muted">Quick access to your documents, announcements and profile.</p>
     </div>
+  </div>
 
-    <div class="uh-grid">
-      <!-- Latest Document Updates -->
-      <div class="uh-column">
-        <div class="uh-feature">
-          <strong>Latest Document Updates</strong>
-          <div class="uh-updates" aria-live="polite">
-            <!-- static placeholders (replace with Django loop later) -->
-            <div class="uh-update-item">
-              <div style="font-size:0.98rem; font-weight:600;">OR/CR Renewal</div>
-              <div style="font-size:0.85rem; color:#475569;">Submitted for approval — Oct 6, 2025</div>
-            </div>
-            <div class="uh-update-item">
-              <div style="font-size:0.98rem; font-weight:600;">Membership Renewal</div>
-              <div style="font-size:0.85rem; color:#475569;">Pending validation — Oct 3, 2025</div>
-            </div>
-            <div class="uh-update-item">
-              <div style="font-size:0.98rem; font-weight:600;">Financial Report Q3</div>
-              <div style="font-size:0.85rem; color:#475569;">Returned for edits — Sep 28, 2025</div>
-            </div>
-          </div>
-        </div>
+  <div class="user-card-grid">
+    <a class="user-card" href="{% url 'user_documents' %}">
+      <div class="uc-left">
+        <div class="uc-icon uc-icon-docs"><i class="la la-files"></i></div>
       </div>
-
-      <!-- Quick Links -->
-      <div class="uh-column">
-        <div class="uh-feature">
-          <strong>Quick Links</strong>
-          <div class="uh-quick" style="margin-top:6px;">
-            <!-- placeholders link to '#' so no reverse errors -->
-            <a href="#">Files</a>
-            <a href="#">Announcements</a>
-            <a href="#">Profile</a>
-          </div>
-        </div>
+      <div class="uc-body">
+        <div class="uc-title">My Documents</div>
+        <div class="uc-sub">{{ document_count|default:0 }} document{{ document_count|pluralize }}</div>
       </div>
-    </div>
+      <div class="uc-right">
+        <span class="uc-action">Open</span>
+      </div>
+    </a>
 
+    <a class="user-card" href="{% url 'user_announcements' %}">
+      <div class="uc-left">
+        <div class="uc-icon uc-icon-bell"><i class="la la-bell"></i></div>
+      </div>
+      <div class="uc-body">
+        <div class="uc-title">Announcements</div>
+        <div class="uc-sub">View messages from managers</div>
+      </div>
+      <div class="uc-right">
+        <span class="uc-action">View</span>
+      </div>
+    </a>
+
+    <a class="user-card" href="{% url 'user_profile' %}">
+      <div class="uc-left">
+        <div class="uc-icon uc-icon-user"><i class="la la-user"></i></div>
+      </div>
+      <div class="uc-body">
+        <div class="uc-title">My Profile</div>
+        <div class="uc-sub">Edit contact & profile picture</div>
+      </div>
+      <div class="uc-right">
+        <span class="uc-action">Edit</span>
+      </div>
+    </a>
+
+    <a class="user-card" href="{% url 'user_vehicles' %}">
+      <div class="uc-left">
+        <div class="uc-icon uc-icon-car"><i class="la la-car"></i></div>
+      </div>
+      <div class="uc-body">
+        <div class="uc-title">My Vehicles</div>
+        <div class="uc-sub">{{ vehicles_count|default:0 }} total</div>
+      </div>
+      <div class="uc-right">
+        <span class="uc-action">Browse</span>
+      </div>
+    </a>
   </div>
 </div>
 {% endblock %}

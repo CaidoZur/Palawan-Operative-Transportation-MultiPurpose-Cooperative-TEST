@@ -9,7 +9,10 @@ from django.utils import timezone
 from datetime import timedelta
 
 from django.db import models
-
+from django.contrib import messages
+from .models import Announcement
+from .forms import AnnouncementForm
+from django.db.models import Q
 
 @user_passes_test(lambda u: u.is_staff)
 def user_approvals(request):
@@ -304,26 +307,40 @@ def document_add_renewal(request, vehicle_id, renewal_date):
 
 # ==== Approve Documents ====
 from django.contrib.admin.views.decorators import staff_member_required
+from .models import DocumentEntry
 
 @staff_member_required
 def approve_documents(request):
-    """
-    View to list and approve user-uploaded documents.
-    Placeholder: shows sample documents for now.
-    """
-    documents = [
-        {'id': 1, 'name': 'OR 2025', 'user': 'Qiyana', 'date_uploaded': '2025-09-16', 'status': 'Pending'},
-        {'id': 2, 'name': 'CR 2025', 'user': 'Qiyana', 'date_uploaded': '2025-09-16', 'status': 'Approved'},
-    ]
+    # Only show entries submitted by users and pending
+    documents = DocumentEntry.objects.filter(
+        status="pending",
+        uploaded_by__isnull=False
+    ).select_related("document", "document__vehicle", "document__vehicle__member", "uploaded_by").order_by("-id")
     return render(request, "approve_documents.html", {"documents": documents})
 
 @staff_member_required
+@require_POST
 def approve_document(request, doc_id):
-    """
-    POST endpoint to approve a document (placeholder logic).
-    """
-    # In real app, update document status in DB
-    return redirect('approve_documents')
+    entry = get_object_or_404(DocumentEntry, pk=doc_id)
+    entry.status = "approved"
+    entry.approved_by = request.user
+    entry.approved_at = timezone.now()
+    entry.manager_notes = request.POST.get("manager_notes", "")
+    entry.save()
+    messages.success(request, "Document entry approved.")
+    return redirect("approve_documents")
+
+@staff_member_required
+@require_POST
+def reject_document(request, doc_id):
+    entry = get_object_or_404(DocumentEntry, pk=doc_id)
+    entry.status = "rejected"
+    entry.approved_by = request.user
+    entry.approved_at = timezone.now()
+    entry.manager_notes = request.POST.get("manager_notes", "")
+    entry.save()
+    messages.success(request, "Document entry rejected.")
+    return redirect("approve_documents")
 
 # ==== User: Upload Document ====
 from django.contrib.auth.decorators import login_required
@@ -508,26 +525,32 @@ class VehicleDeleteView(DeleteView):
 
 # ==== Class-based Views: Document ====
 
+from django.db.models import Max, Q
+
 @method_decorator(login_required, name='dispatch')
 class DocumentListView(ListView):
-    """
-    Displays a paginated list of documents.
-    Shows vehicle, member, renewal date, and links to OR/CR images.
-    """
     model = Document
     template_name = "documentlist.html"
     context_object_name = "object_list"
     paginate_by = 10
+
     def get_queryset(self):
         qs = super().get_queryset().select_related('vehicle', 'vehicle__member')
         q = (self.request.GET.get('q') or '').strip()
-        if not q:
-            return qs
-        return qs.filter(
-            Q(tin__icontains=q) |
-            Q(vehicle__plate_number__icontains=q) |
-            Q(vehicle__member__full_name__icontains=q)
-        ).distinct()
+        if q:
+            qs = qs.filter(
+                Q(tin__icontains=q) |
+                Q(vehicle__plate_number__icontains=q) |
+                Q(vehicle__member__full_name__icontains=q)
+            ).distinct()
+        # Annotate with latest approved/manager renewal date
+        qs = qs.annotate(
+            latest_approved_renewal=Max(
+                'entries__renewal_date',
+                filter=Q(entries__status="approved") | Q(entries__uploaded_by__isnull=True)
+            )
+        )
+        return qs
 
     def render_to_response(self, context, **response_kwargs):
         if self.request.headers.get('x-requested-with') == 'XMLHttpRequest':
@@ -630,9 +653,21 @@ def custom_login(request):
         request.session.flush()
         return render(request, "login.html")
     if request.method == "POST":
-        username = request.POST.get("username")
+        username_input = (request.POST.get("username") or "").strip()
         password = request.POST.get("password")
-        user = authenticate(request, username=username, password=password)
+        # first try normal authenticate (treat input as username)
+        user = authenticate(request, username=username_input, password=password)
+        # fallback: if not found, try to treat input as email and resolve to username
+        if user is None and username_input:
+            from django.contrib.auth import get_user_model
+            UserModel = get_user_model()
+            try:
+                user_obj = UserModel.objects.get(email__iexact=username_input)
+            except UserModel.DoesNotExist:
+                user_obj = None
+            if user_obj:
+                user = authenticate(request, username=user_obj.get_username(), password=password)
+
         if user is not None:
             if not user.is_active:
                 messages.error(request, "Your account is not yet approved by the admin.")
@@ -647,7 +682,7 @@ def custom_login(request):
                 messages.error(request, "You do not have access to the user portal.")
                 return render(request, "login.html")
         else:
-            messages.error(request, "Invalid username or password.")
+            messages.error(request, "Invalid username/email or password.")
     return render(request, "login.html")
 
 
@@ -702,6 +737,15 @@ class DocumentDetailView(DetailView):
     model = Document
     template_name = "document_detail.html"
     context_object_name = "document"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        document = self.get_object()
+        # Only show manager-created or approved user entries
+        context['approved_entries'] = document.entries.filter(
+            models.Q(uploaded_by__isnull=True) | models.Q(status="approved")
+        ).order_by('renewal_date')
+        return context
 
 class DocumentEntryDetailView(DetailView):
     model = DocumentEntry
@@ -838,47 +882,100 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .forms import UserProfileForm
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
 
 User = get_user_model()
 
 @login_required
 def my_profile(request):
+    """
+    Edit logged-in user's profile (separate edit template).
+    Editable fields: full_name, email, phone_number, profile_image.
+    """
     user = request.user
     if request.method == 'POST':
         form = UserProfileForm(request.POST, request.FILES, instance=user)
         if form.is_valid():
             form.save()
             messages.success(request, 'Profile updated.')
-            return redirect('my_profile')
+            return redirect('user_profile')  # view-only page after edit
     else:
         form = UserProfileForm(instance=user)
-    return render(request, 'profile.html', {'form': form, 'user_obj': user})
+    return render(request, 'user_profile_edit.html', {'form': form, 'user_obj': user})
+
+@login_required
+def user_vehicles(request):
+    if not getattr(request.user, 'member_profile', None):
+        messages.info(request, "No member profile connected to your account.")
+    return render(request, "user_vehicles.html")
+
+@login_required
+def user_documents(request):
+    """
+    User-facing documents view.
+    Only shows documents when:
+      - user is linked to a Member (user.member_profile)
+      - that Member has a Vehicle that has a Document assigned
+    Otherwise show an informational message and no documents.
+    """
+    user = request.user
+    member = getattr(user, "member_profile", None)
+
+    if not member:
+        messages.info(request, "Your account is not assigned to a member. Ask a manager to link you to a member with vehicles/documents.")
+        return render(request, "user_documents.html", {"documents": [], "member": None, "allowed": False})
+
+    vehicles = member.vehicles.select_related("document").all()
+    documents = []
+    for v in vehicles:
+        doc = getattr(v, "document", None)
+        if doc:
+            entries = doc.entries.order_by("-renewal_date")
+            documents.append({"vehicle": v, "document": doc, "entries": entries})
+
+    if not documents:
+        messages.info(request, "No documents available for your assigned vehicles. A manager must assign a vehicle with a document to your member account.")
+        return render(request, "user_documents.html", {"documents": [], "member": member, "allowed": False})
+
+    return render(request, "user_documents.html", {"documents": documents, "member": member, "allowed": True})
 
 from django.shortcuts import render, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import Member, Document, DocumentEntry, User
+from .forms import AdminProfileForm
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def admin_profile_edit(request):
+    user = request.user
+    if request.method == 'POST':
+        form = AdminProfileForm(request.POST, request.FILES, instance=user)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Profile updated successfully.")
+            return redirect('admin_profile_edit')
+    else:
+        form = AdminProfileForm(instance=user)
+    return render(request, 'admin_profile_edit.html', {'form': form})
 
 @staff_member_required
 def member_view(request, pk):
     member = get_object_or_404(Member, pk=pk)
-    # safely get linked user account (None if not connected)
     user_account = getattr(member, 'user_account', None)
-
     vehicles = list(member.vehicles.all()) if hasattr(member, 'vehicles') else []
-    documents = list(Document.objects.filter(vehicle__in=vehicles)) if vehicles else []
-
-    # build mapping of entries and attach to documents
-    entries_qs = DocumentEntry.objects.filter(document__in=documents).order_by('renewal_date')
-    doc_entries = {}
-    for e in entries_qs:
-        doc_entries.setdefault(e.document_id, []).append(e)
-    # attach entries list to each document object (avoid clobbering related manager)
-    for doc in documents:
-        doc.entries_list = doc_entries.get(doc.id, [])
-
+    # Only include documents with at least one approved/manager entry
+    documents = []
+    for doc in Document.objects.filter(vehicle__in=vehicles):
+        # Only approved or manager-created entries
+        entries = list(doc.entries.filter(
+            models.Q(status="approved") | models.Q(uploaded_by__isnull=True)
+        ).order_by('renewal_date'))
+        if entries:
+            doc.entries_list = entries
+            documents.append(doc)
     return render(request, 'member_detail.html', {
         'member': member,
-        'user_account': user_account,   # pass user object (or None) to template
+        'user_account': user_account,
         'vehicles': vehicles,
         'documents': documents,
     })
@@ -1017,3 +1114,100 @@ def home(request):
         'batch_cards': batch_cards,
     }
     return render(request, "home.html", context)
+
+@staff_member_required
+def broadcast(request):
+    """
+    Admin/Manager page to create announcements targeted to client users.
+    If recipients left empty in the form, the announcement will be considered
+    broadcast to all clients (handled when clients fetch announcements).
+    """
+    if request.method == "POST":
+        form = AnnouncementForm(request.POST)
+        if form.is_valid():
+            ann = form.save(commit=False)
+            ann.created_by = request.user
+            ann.save()
+            form.save_m2m()
+            messages.success(request, "Announcement created.")
+            # Placeholder for dispatch (email/push). Implement send logic here if desired.
+            return redirect('broadcast')
+    else:
+        form = AnnouncementForm()
+
+    broadcasts = Announcement.objects.order_by('-created_at')[:50]
+    return render(request, "broadcast.html", {"form": form, "broadcasts": broadcasts})
+
+
+@login_required
+def user_announcements(request):
+    """
+    Client-facing announcement list:
+    - Show announcements that either target this user (recipients includes user)
+      OR have no recipients (meaning broadcast to all clients).
+    """
+    user = request.user
+    qs = Announcement.objects.filter(Q(recipients__isnull=True) | Q(recipients=user)).distinct().order_by('-created_at')
+    return render(request, "user_announcements.html", {"announcements": qs})
+
+@login_required
+def user_upload_document(request):
+    """
+    Allow client users to add a DocumentEntry only if their account is tied:
+    User -> Member -> Vehicle -> Document. Saves OR/CR and renewal_date under
+    the existing Document. Redirects to user_documents on success.
+    """
+    user = request.user
+    if getattr(user, "role", None) != "client":
+        messages.error(request, "Only client users can upload document entries.")
+        return redirect("home")
+
+    member = getattr(user, "member_profile", None)
+    if not member:
+        messages.error(request, "No member profile assigned to your account.")
+        return redirect("user_home")
+
+    document = None
+    vehicle = None
+    for v in member.vehicles.all():
+        if getattr(v, "document", None):
+            vehicle = v
+            document = v.document
+            break
+
+    if not document:
+        messages.error(request, "No document assigned to your vehicle. Contact your manager.")
+        return redirect("user_home")
+
+    # List user's entries for this document
+    user_entries = DocumentEntry.objects.filter(document=document, uploaded_by=user).order_by('-id')
+
+    if request.method == "POST":
+        form = DocumentEntryForm(request.POST, request.FILES)
+        if form.is_valid():
+            entry = form.save(commit=False)
+            entry.document = document
+            entry.uploaded_by = user
+            entry.status = "pending"
+            entry.save()
+            messages.success(request, "Document uploaded successfully and is pending manager approval.")
+            return redirect("user_upload_document")
+        else:
+            messages.error(request, "Please fix the errors below.")
+    else:
+        latest = document.entries.order_by("-renewal_date").first()
+        initial = {}
+        if latest and latest.renewal_date:
+            try:
+                initial_date = latest.renewal_date.replace(year=latest.renewal_date.year + 1)
+            except Exception:
+                initial_date = latest.renewal_date
+            initial["renewal_date"] = initial_date
+        form = DocumentEntryForm(initial=initial)
+
+    return render(request, "user_upload_document.html", {
+        "form": form,
+        "vehicle": vehicle,
+        "document": document,
+        "entries": user_entries,
+    })
