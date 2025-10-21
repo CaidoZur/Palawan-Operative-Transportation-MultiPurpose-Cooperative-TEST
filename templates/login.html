@@ -39,11 +39,24 @@
                 <a href="{% url 'password_reset' %}" class="btn btn-link p-0">Forgot Password?</a>
             </div>
             <button type="submit" class="login-btn">Sign In</button>
+            <button id="start-scan-btn" class="btn btn-primary">Scan QR Code</button>
+            <button id="stop-scan-btn" class="btn btn-secondary" style="display:none;">Stop Scanner</button>
+            <div id="qr-reader" style="width:100%; max-width:400px; margin-top:10px; display:none;"></div>
+            <div id="qr-result" style="margin-top:10px;"></div>
+        </form>
+        <form method="post" enctype="multipart/form-data" action="{% url 'qr-image-login' %}">
+            {% csrf_token %}
+            <label for="qr_image">Upload QR Code Image</label>
+            <input type="file" name="qr_image" accept="image/*" required>
+            <button type="submit" class="btn btn-primary">Login with QR Image</button>
         </form>
         <div class="text-center mt-3">
             <a href="{% url 'register' %}">Don't have an account? Register here</a>
         </div>
     </div>
+    
+
+    
     <script>
         function togglePassword() {
             var pwd = document.getElementById('password');
@@ -53,6 +66,72 @@
                 pwd.type = 'password';
             }
         }
+
+        document.addEventListener("DOMContentLoaded", function(){
+            const startBtn = document.getElementById("start-scan-btn");
+            const stopBtn = document.getElementById("stop-scan-btn");
+            const qrReaderDiv = document.getElementById("qr-reader");
+            const qrResult = document.getElementById("qr-result");
+            let html5QrCode = null;
+
+            startBtn.addEventListener("click", function(){
+                qrReaderDiv.style.display = "block";
+                startBtn.style.display = "none";
+                stopBtn.style.display = "inline-block";
+                html5QrCode = new Html5Qrcode("qr-reader");
+
+                Html5Qrcode.getCameras().then(cameras => {
+                if (cameras && cameras.length) {
+                    const cameraId = cameras[0].id;
+                    html5QrCode.start(
+                    cameraId,
+                    { fps: 10, qrbox: 250 },
+                    (decodedText, decodedResult) => {
+                        // decodedText will be the scanned URL (or token string)
+                        qrResult.innerText = "QR scanned: " + decodedText;
+                        // if the QR encodes the direct login URL (recommended), redirect to it:
+                        if (decodedText.startsWith("http")) {
+                        html5QrCode.stop().then(() => {
+                            window.location.href = decodedText;
+                        }).catch(err => {
+                            // fallback: set location
+                            window.location.href = decodedText;
+                        });
+                        } else {
+                        // if the QR only contains token, build the URL and go
+                        const token = decodedText.trim();
+                        const url = "/qr-login/" + encodeURIComponent(token) + "/";
+                        html5QrCode.stop().then(() => {
+                            window.location.href = url;
+                        }).catch(err => { window.location.href = url; });
+                        }
+                    },
+                    (errorMessage) => {
+                        // decode errors or partial scans can be ignored
+                    })
+                    .catch(err => {
+                    qrResult.innerText = "Unable to start camera: " + err;
+                    });
+                } else {
+                    qrResult.innerText = "No camera found.";
+                }
+                }).catch(err => {
+                qrResult.innerText = "Camera access error: " + err;
+                });
+            });
+
+            stopBtn.addEventListener("click", function(){
+                if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    qrReaderDiv.style.display = "none";
+                    startBtn.style.display = "inline-block";
+                    stopBtn.style.display = "none";
+                }).catch(err => {
+                    console.error(err);
+                });
+                }
+            });
+        });
     </script>
     <script src="{% static 'js/core/jquery.3.2.1.min.js' %}"></script>
     <script src="{% static 'js/plugin/jquery-ui-1.12.1.custom/jquery-ui.min.js' %}"></script>
@@ -67,5 +146,6 @@
     <script src="{% static 'js/plugin/jquery-circle-progress/circle-progress.min.js' %}"></script>
     <script src="{% static 'js/plugin/jquery-scrollbar/jquery.scrollbar.min.js' %}"></script>
     <script src="{% static 'js/ready.min.js' %}"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
 </body>
 </html>
